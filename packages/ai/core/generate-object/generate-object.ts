@@ -469,6 +469,7 @@ export async function generateObject<SCHEMA, RESULT>({
       let request: LanguageModelRequestMetadata;
       let logprobs: LogProbs | undefined;
       let resultProviderMetadata: ProviderMetadata | undefined;
+      console.log('mode...', mode);
 
       switch (mode) {
         case 'json': {
@@ -494,6 +495,8 @@ export async function generateObject<SCHEMA, RESULT>({
             modelSupportsImageUrls: model.supportsImageUrls,
             modelSupportsUrl: model.supportsUrl?.bind(model), // support 'this' context
           });
+
+          console.log('promptMessages...', promptMessages);
 
           const generateResult = await retry(() =>
             recordSpan({

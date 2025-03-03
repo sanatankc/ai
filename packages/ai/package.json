@@ -1,5 +1,5 @@
 {
-  "name": "ai",
+  "name": "@sanatan/ai",
   "version": "4.1.46",
   "description": "AI SDK by Vercel - The AI Toolkit for TypeScript and JavaScript",
   "license": "Apache-2.0",

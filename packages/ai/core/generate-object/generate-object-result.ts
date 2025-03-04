@@ -7,6 +7,7 @@ import {
   ProviderMetadata,
 } from '../types';
 import { LanguageModelUsage } from '../types/usage';
+import { ReasoningDetail } from '../generate-text/reasoning-detail';
 
 /**
 The result of a `generateObject` call.
@@ -67,4 +68,14 @@ results that can be fully encapsulated in the provider.
   The response will have a status code of 200 and a content type of `application/json; charset=utf-8`.
      */
   toJsonResponse(init?: ResponseInit): Response;
+
+  /**
+   * The reasoning text extracted from the model's response
+   */
+  readonly reasoning: string | undefined;
+
+  /**
+   * The detailed reasoning information extracted from the model's response
+   */
+  readonly reasoningDetails: Array<ReasoningDetail>;
 }

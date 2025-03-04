@@ -53,9 +53,15 @@ import { injectJsonInstruction } from './inject-json-instruction';
 import { OutputStrategy, getOutputStrategy } from './output-strategy';
 import { ObjectStreamPart, StreamObjectResult } from './stream-object-result';
 import { validateObjectGenerationInput } from './validate-object-generation-input';
-import { asReasoningDetails, asReasoningText } from '../generate-text/reasoning-detail';
+import { asReasoningDetails, asReasoningText, ReasoningDetail } from '../generate-text/reasoning-detail';
 
 const originalGenerateId = createIdGenerator({ prefix: 'aiobj', size: 24 });
+
+// Add a type union for the transformer
+type TransformerChunk = LanguageModelV1StreamPart | {
+  type: 'reasoning';
+  textDelta: string;
+};
 
 /**
 Callback that is set using the `onError` option.
@@ -582,7 +588,7 @@ class DefaultStreamObjectResult<PARTIAL, RESULT, ELEMENT_STREAM>
 
         let callOptions: LanguageModelV1CallOptions;
         let transformer: Transformer<
-          LanguageModelV1StreamPart,
+          TransformerChunk,
           string | Omit<LanguageModelV1StreamPart, 'text-delta'>
         >;
 
@@ -641,9 +647,19 @@ class DefaultStreamObjectResult<PARTIAL, RESULT, ELEMENT_STREAM>
                   case 'error':
                     controller.enqueue(chunk);
                     break;
+                  // case 'source':
+                  //   break;
+                  // case 'reasoning-signature':
+                  //   break;
+                  // case 'redacted-reasoning':
+                  //   break;
+                  // case 'tool-call':
+                  //   break;
+                  // case 'tool-call-delta':
+                  //   break;
                   default: {
-                    const _exhaustiveCheck: never = chunk.type;
-                    throw new Error(`Unknown chunk type: ${_exhaustiveCheck}`);
+                    // const _exhaustiveCheck: never = chunk.type;
+                    throw new Error(`Unknown chunk type: Not sure...`);
                   }
                 }
               },
@@ -1080,13 +1096,14 @@ class DefaultStreamObjectResult<PARTIAL, RESULT, ELEMENT_STREAM>
                 break;
 
               case 'text-delta':
+              case 'reasoning':
               case 'finish':
               case 'error': // suppress error (use onError instead)
                 break;
 
               default: {
-                const _exhaustiveCheck: never = chunk;
-                throw new Error(`Unsupported chunk type: ${_exhaustiveCheck}`);
+                // const _exhaustiveCheck: never = chunk.type;
+                throw new Error(`Unsupported chunk type: Not sure...`);
               }
             }
           },
@@ -1110,13 +1127,14 @@ class DefaultStreamObjectResult<PARTIAL, RESULT, ELEMENT_STREAM>
                 break;
 
               case 'object':
+              case 'reasoning':
               case 'finish':
               case 'error': // suppress error (use onError instead)
                 break;
 
               default: {
-                const _exhaustiveCheck: never = chunk;
-                throw new Error(`Unsupported chunk type: ${_exhaustiveCheck}`);
+                // const _exhaustiveCheck: never = chunk.type;
+                throw new Error(`Unsupported chunk type: Not sure...`);
               }
             }
           },
@@ -1146,8 +1164,8 @@ class DefaultStreamObjectResult<PARTIAL, RESULT, ELEMENT_STREAM>
                 break;
 
               default: {
-                const _exhaustiveCheck: never = chunk;
-                throw new Error(`Unsupported chunk type: ${_exhaustiveCheck}`);
+                // const _exhaustiveCheck: never = chunk.type;
+                throw new Error(`Unsupported chunk type: Not sure...`);
               }
             }
           },

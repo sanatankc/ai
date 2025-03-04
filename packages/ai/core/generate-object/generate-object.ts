@@ -35,7 +35,7 @@ import { GenerateObjectResult } from './generate-object-result';
 import { injectJsonInstruction } from './inject-json-instruction';
 import { getOutputStrategy } from './output-strategy';
 import { validateObjectGenerationInput } from './validate-object-generation-input';
-import { asReasoningDetails, asReasoningText } from '../generate-text/reasoning-detail';
+import { asReasoningDetails, asReasoningText, ReasoningDetail } from '../generate-text/reasoning-detail';
 
 const originalGenerateId = createIdGenerator({ prefix: 'aiobj', size: 24 });
 
@@ -470,6 +470,8 @@ export async function generateObject<SCHEMA, RESULT>({
       let request: LanguageModelRequestMetadata;
       let logprobs: LogProbs | undefined;
       let resultProviderMetadata: ProviderMetadata | undefined;
+      let reasoning: string | undefined;
+      let reasoningDetails: Array<ReasoningDetail> = [];
 
       switch (mode) {
         case 'json': {
@@ -603,8 +605,8 @@ export async function generateObject<SCHEMA, RESULT>({
 
           // NEW: extract reasoning from the model output
           const rawReasoning = generateResult.reasoning;
-          const reasoningDetails = asReasoningDetails(rawReasoning);
-          const reasoning = asReasoningText(reasoningDetails);
+          reasoningDetails = asReasoningDetails(rawReasoning);
+          reasoning = asReasoningText(reasoningDetails);
           break;
         }
 
@@ -732,8 +734,8 @@ export async function generateObject<SCHEMA, RESULT>({
 
           // NEW: extract reasoning from the model output
           const rawReasoning = generateResult.reasoning;
-          const reasoningDetails = asReasoningDetails(rawReasoning);
-          const reasoning = asReasoningText(reasoningDetails);
+          reasoningDetails = asReasoningDetails(rawReasoning);
+          reasoning = asReasoningText(reasoningDetails);
           break;
         }
 
@@ -837,8 +839,8 @@ export async function generateObject<SCHEMA, RESULT>({
         },
         logprobs,
         providerMetadata: resultProviderMetadata,
-        reasoning,
-        reasoningDetails,
+        reasoning: reasoning,
+        reasoningDetails: reasoningDetails,
       });
     },
   });

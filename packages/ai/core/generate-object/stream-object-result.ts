@@ -9,6 +9,7 @@ import {
 } from '../types';
 import { LanguageModelUsage } from '../types/usage';
 import { AsyncIterableStream } from '../util/async-iterable-stream';
+import { ReasoningDetail } from '../generate-text/reasoning-detail';
 
 /**
 The result of a `streamObject` call that contains the partial object stream and additional information.
@@ -82,6 +83,16 @@ Additional response information.
   readonly reasoningStream: AsyncIterableStream<string>;
 
   /**
+   * The final reasoning text, available when the stream completes
+   */
+  readonly reasoning: Promise<string | undefined>;
+
+  /**
+   * The final reasoning details, available when the stream completes
+   */
+  readonly reasoningDetails: Promise<Array<ReasoningDetail>>;
+
+  /**
   Writes text delta output to a Node.js response-like object.
   It sets a `Content-Type` header to `text/plain; charset=utf-8` and
   writes each text delta as a separate chunk.
@@ -109,6 +120,10 @@ export type ObjectStreamPart<PARTIAL> =
     }
   | {
       type: 'text-delta';
+      textDelta: string;
+    }
+  | {
+      type: 'reasoning';
       textDelta: string;
     }
   | {

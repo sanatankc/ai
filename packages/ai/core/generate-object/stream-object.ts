@@ -53,6 +53,7 @@ import { injectJsonInstruction } from './inject-json-instruction';
 import { OutputStrategy, getOutputStrategy } from './output-strategy';
 import { ObjectStreamPart, StreamObjectResult } from './stream-object-result';
 import { validateObjectGenerationInput } from './validate-object-generation-input';
+import { asReasoningDetails, asReasoningText } from '../generate-text/reasoning-detail';
 
 const originalGenerateId = createIdGenerator({ prefix: 'aiobj', size: 24 });
 
@@ -463,6 +464,8 @@ class DefaultStreamObjectResult<PARTIAL, RESULT, ELEMENT_STREAM>
     new DelayedPromise<LanguageModelRequestMetadata>();
   private readonly responsePromise =
     new DelayedPromise<LanguageModelResponseMetadata>();
+  private readonly reasoningPromise = new DelayedPromise<string | undefined>();
+  private readonly reasoningDetailsPromise = new DelayedPromise<Array<ReasoningDetail>>();
 
   private readonly baseStream: ReadableStream<ObjectStreamPart<PARTIAL>>;
 
@@ -583,6 +586,8 @@ class DefaultStreamObjectResult<PARTIAL, RESULT, ELEMENT_STREAM>
           string | Omit<LanguageModelV1StreamPart, 'text-delta'>
         >;
 
+        let accumulatedReasoning = '';
+
         switch (mode) {
           case 'json': {
             const standardizedPrompt = standardizePrompt({
@@ -622,16 +627,24 @@ class DefaultStreamObjectResult<PARTIAL, RESULT, ELEMENT_STREAM>
             };
 
             transformer = {
-              transform: (chunk, controller) => {
+              transform(chunk, controller) {
                 switch (chunk.type) {
                   case 'text-delta':
                     controller.enqueue(chunk.textDelta);
                     break;
+                  case 'reasoning': {
+                    accumulatedReasoning += chunk.textDelta;
+                    break;
+                  }
                   case 'response-metadata':
                   case 'finish':
                   case 'error':
                     controller.enqueue(chunk);
                     break;
+                  default: {
+                    const _exhaustiveCheck: never = chunk.type;
+                    throw new Error(`Unknown chunk type: ${_exhaustiveCheck}`);
+                  }
                 }
               },
             };
@@ -674,6 +687,10 @@ class DefaultStreamObjectResult<PARTIAL, RESULT, ELEMENT_STREAM>
                   case 'tool-call-delta':
                     controller.enqueue(chunk.argsTextDelta);
                     break;
+                  case 'reasoning': {
+                    accumulatedReasoning += chunk.textDelta;
+                    break;
+                  }
                   case 'response-metadata':
                   case 'finish':
                   case 'error':
@@ -980,6 +997,12 @@ class DefaultStreamObjectResult<PARTIAL, RESULT, ELEMENT_STREAM>
                     providerMetadata,
                     experimental_providerMetadata: providerMetadata,
                   });
+
+                  // NEW: Process the accumulated reasoning
+                  const reasoningDetails = asReasoningDetails(accumulatedReasoning);
+                  const reasoning = asReasoningText(reasoningDetails);
+                  self.reasoningPromise.resolve(reasoning);
+                  self.reasoningDetailsPromise.resolve(reasoningDetails);
                 } catch (error) {
                   controller.enqueue({ type: 'error', error });
                 } finally {
@@ -1036,6 +1059,14 @@ class DefaultStreamObjectResult<PARTIAL, RESULT, ELEMENT_STREAM>
 
   get response() {
     return this.responsePromise.value;
+  }
+
+  get reasoning() {
+    return this.reasoningPromise.value;
+  }
+
+  get reasoningDetails() {
+    return this.reasoningDetailsPromise.value;
   }
 
   get partialObjectStream(): AsyncIterableStream<PARTIAL> {
@@ -1098,6 +1129,33 @@ class DefaultStreamObjectResult<PARTIAL, RESULT, ELEMENT_STREAM>
     return createAsyncIterableStream(this.baseStream);
   }
 
+  get reasoningStream(): AsyncIterableStream<string> {
+    return createAsyncIterableStream(
+      this.baseStream.pipeThrough(
+        new TransformStream<ObjectStreamPart<PARTIAL>, string>({
+          transform(chunk, controller) {
+            switch (chunk.type) {
+              case 'reasoning':
+                controller.enqueue(chunk.textDelta);
+                break;
+
+              case 'object':
+              case 'text-delta':
+              case 'finish':
+              case 'error': // suppress error (use onError instead)
+                break;
+
+              default: {
+                const _exhaustiveCheck: never = chunk;
+                throw new Error(`Unsupported chunk type: ${_exhaustiveCheck}`);
+              }
+            }
+          },
+        }),
+      ),
+    );
+  }
+
   pipeTextStreamToResponse(response: ServerResponse, init?: ResponseInit) {
     writeToServerResponse({
       response,
@@ -1138,3 +1196,4 @@ export type ObjectStreamInputPart =
       usage: LanguageModelUsage;
       providerMetadata?: ProviderMetadata;
     };
+

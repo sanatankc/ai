@@ -35,6 +35,7 @@ import { GenerateObjectResult } from './generate-object-result';
 import { injectJsonInstruction } from './inject-json-instruction';
 import { getOutputStrategy } from './output-strategy';
 import { validateObjectGenerationInput } from './validate-object-generation-input';
+import { asReasoningDetails, asReasoningText } from '../generate-text/reasoning-detail';
 
 const originalGenerateId = createIdGenerator({ prefix: 'aiobj', size: 24 });
 
@@ -469,7 +470,6 @@ export async function generateObject<SCHEMA, RESULT>({
       let request: LanguageModelRequestMetadata;
       let logprobs: LogProbs | undefined;
       let resultProviderMetadata: ProviderMetadata | undefined;
-      console.log('mode...', mode);
 
       switch (mode) {
         case 'json': {
@@ -560,7 +560,6 @@ export async function generateObject<SCHEMA, RESULT>({
                   });
                 }
 
-                // Add response information to the span:
                 span.setAttributes(
                   selectTelemetryAttributes({
                     telemetry,
@@ -602,6 +601,10 @@ export async function generateObject<SCHEMA, RESULT>({
           request = generateResult.request ?? {};
           response = generateResult.responseData;
 
+          // NEW: extract reasoning from the model output
+          const rawReasoning = generateResult.reasoning;
+          const reasoningDetails = asReasoningDetails(rawReasoning);
+          const reasoning = asReasoningText(reasoningDetails);
           break;
         }
 
@@ -727,6 +730,10 @@ export async function generateObject<SCHEMA, RESULT>({
           request = generateResult.request ?? {};
           response = generateResult.responseData;
 
+          // NEW: extract reasoning from the model output
+          const rawReasoning = generateResult.reasoning;
+          const reasoningDetails = asReasoningDetails(rawReasoning);
+          const reasoning = asReasoningText(reasoningDetails);
           break;
         }
 
@@ -830,6 +837,8 @@ export async function generateObject<SCHEMA, RESULT>({
         },
         logprobs,
         providerMetadata: resultProviderMetadata,
+        reasoning,
+        reasoningDetails,
       });
     },
   });
@@ -845,6 +854,8 @@ class DefaultGenerateObjectResult<T> implements GenerateObjectResult<T> {
   readonly providerMetadata: GenerateObjectResult<T>['providerMetadata'];
   readonly response: GenerateObjectResult<T>['response'];
   readonly request: GenerateObjectResult<T>['request'];
+  readonly reasoning: string | undefined;
+  readonly reasoningDetails: Array<ReasoningDetail>;
 
   constructor(options: {
     object: GenerateObjectResult<T>['object'];
@@ -855,6 +866,8 @@ class DefaultGenerateObjectResult<T> implements GenerateObjectResult<T> {
     providerMetadata: GenerateObjectResult<T>['providerMetadata'];
     response: GenerateObjectResult<T>['response'];
     request: GenerateObjectResult<T>['request'];
+    reasoning: string | undefined;
+    reasoningDetails: Array<ReasoningDetail>;
   }) {
     this.object = options.object;
     this.finishReason = options.finishReason;
@@ -865,6 +878,8 @@ class DefaultGenerateObjectResult<T> implements GenerateObjectResult<T> {
     this.response = options.response;
     this.request = options.request;
     this.logprobs = options.logprobs;
+    this.reasoning = options.reasoning;
+    this.reasoningDetails = options.reasoningDetails;
   }
 
   toJsonResponse(init?: ResponseInit): Response {

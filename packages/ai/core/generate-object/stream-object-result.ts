@@ -77,6 +77,11 @@ Additional response information.
   readonly fullStream: AsyncIterableStream<ObjectStreamPart<PARTIAL>>;
 
   /**
+   * A stream that emits only the reasoning text as it arrives.
+   */
+  readonly reasoningStream: AsyncIterableStream<string>;
+
+  /**
   Writes text delta output to a Node.js response-like object.
   It sets a `Content-Type` header to `text/plain; charset=utf-8` and
   writes each text delta as a separate chunk.

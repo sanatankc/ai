@@ -474,6 +474,10 @@ class DefaultStreamObjectResult<PARTIAL, RESULT, ELEMENT_STREAM>
   private readonly reasoningDetailsPromise = new DelayedPromise<Array<ReasoningDetail>>();
 
   private readonly baseStream: ReadableStream<ObjectStreamPart<PARTIAL>>;
+  private readonly textBranch: ReadableStream<string>;
+  private readonly reasoningBranch: ReadableStream<string>;
+  private readonly partialObjectBranch: ReadableStream<PARTIAL>;
+  private readonly fullBranch: ReadableStream<ObjectStreamPart<PARTIAL>>;
 
   private readonly outputStrategy: OutputStrategy<
     PARTIAL,
@@ -552,7 +556,44 @@ class DefaultStreamObjectResult<PARTIAL, RESULT, ELEMENT_STREAM>
       },
     });
 
-    this.baseStream = stitchableStream.stream.pipeThrough(eventProcessor);
+    const [branch1, branch2] = stitchableStream.stream.tee();
+    const [branch3, branch4] = branch1.tee();
+    const [textBranch, reasoningBranch] = branch3.tee();
+    const [partialObjectBranch, fullBranch] = branch4.tee();
+
+    this.baseStream = branch2;
+
+    this.textBranch = textBranch.pipeThrough(
+      new TransformStream<ObjectStreamPart<PARTIAL>, string>({
+        transform(chunk, controller) {
+          if (chunk.type === 'text-delta') {
+            controller.enqueue(chunk.textDelta);
+          }
+        }
+      })
+    );
+
+    this.reasoningBranch = reasoningBranch.pipeThrough(
+      new TransformStream<ObjectStreamPart<PARTIAL>, string>({
+        transform(chunk, controller) {
+          if (chunk.type === 'reasoning') {
+            controller.enqueue(chunk.textDelta);
+          }
+        }
+      })
+    );
+
+    this.partialObjectBranch = partialObjectBranch.pipeThrough(
+      new TransformStream<ObjectStreamPart<PARTIAL>, PARTIAL>({
+        transform(chunk, controller) {
+          if (chunk.type === 'object') {
+            controller.enqueue(chunk.object);
+          }
+        }
+      })
+    );
+
+    this.fullBranch = fullBranch;
 
     recordSpan({
       name: 'ai.streamObject',
@@ -1085,93 +1126,24 @@ class DefaultStreamObjectResult<PARTIAL, RESULT, ELEMENT_STREAM>
     return this.reasoningDetailsPromise.value;
   }
 
+  get textStream(): AsyncIterableStream<string> {
+    return createAsyncIterableStream(this.textBranch);
+  }
+
+  get reasoningStream(): AsyncIterableStream<string> {
+    return createAsyncIterableStream(this.reasoningBranch);
+  }
+
   get partialObjectStream(): AsyncIterableStream<PARTIAL> {
-    return createAsyncIterableStream(
-      this.baseStream.pipeThrough(
-        new TransformStream<ObjectStreamPart<PARTIAL>, PARTIAL>({
-          transform(chunk, controller) {
-            switch (chunk.type) {
-              case 'object':
-                controller.enqueue(chunk.object);
-                break;
+    return createAsyncIterableStream(this.partialObjectBranch);
+  }
 
-              case 'text-delta':
-              case 'reasoning':
-              case 'finish':
-              case 'error': // suppress error (use onError instead)
-                break;
-
-              default: {
-                // const _exhaustiveCheck: never = chunk.type;
-                throw new Error(`Unsupported chunk type: Not sure...`);
-              }
-            }
-          },
-        }),
-      ),
-    );
+  get fullStream(): AsyncIterableStream<ObjectStreamPart<PARTIAL>> {
+    return createAsyncIterableStream(this.fullBranch);
   }
 
   get elementStream(): ELEMENT_STREAM {
     return this.outputStrategy.createElementStream(this.baseStream);
-  }
-
-  get textStream(): AsyncIterableStream<string> {
-    return createAsyncIterableStream(
-      this.baseStream.pipeThrough(
-        new TransformStream<ObjectStreamPart<PARTIAL>, string>({
-          transform(chunk, controller) {
-            switch (chunk.type) {
-              case 'text-delta':
-                controller.enqueue(chunk.textDelta);
-                break;
-
-              case 'object':
-              case 'reasoning':
-              case 'finish':
-              case 'error': // suppress error (use onError instead)
-                break;
-
-              default: {
-                // const _exhaustiveCheck: never = chunk.type;
-                throw new Error(`Unsupported chunk type: Not sure...`);
-              }
-            }
-          },
-        }),
-      ),
-    );
-  }
-
-  get fullStream(): AsyncIterableStream<ObjectStreamPart<PARTIAL>> {
-    return createAsyncIterableStream(this.baseStream);
-  }
-
-  get reasoningStream(): AsyncIterableStream<string> {
-    return createAsyncIterableStream(
-      this.baseStream.pipeThrough(
-        new TransformStream<ObjectStreamPart<PARTIAL>, string>({
-          transform(chunk, controller) {
-            switch (chunk.type) {
-              case 'reasoning':
-                controller.enqueue(chunk.textDelta);
-                break;
-
-              case 'object':
-              case 'text-delta':
-              case 'finish':
-              case 'error': // suppress error (use onError instead)
-                break;
-
-              default: {
-                // const _exhaustiveCheck: never = chunk.type;
-                throw new Error(`Unsupported chunk type: Not sure...`);
-              }
-            }
-          },
-        }),
-      ),
-    );
   }
 
   pipeTextStreamToResponse(response: ServerResponse, init?: ResponseInit) {
